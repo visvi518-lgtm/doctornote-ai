@@ -133,6 +133,16 @@ export interface ApiError {
   detail: string;
 }
 
+// ────────────── Banner ──────────────
+export interface Banner {
+  id: number;
+  title?: string;
+  subtitle?: string;
+  has_image: boolean;
+  order_idx?: number;
+  is_active?: boolean;
+}
+
 // ────────────── Admin ──────────────
 export type BanDuration = '3d' | '3w' | '3m' | '3y' | 'permanent';
 

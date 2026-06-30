@@ -108,6 +108,11 @@ export const chatApi = {
     api.delete(`/chat/sessions/${sessionId}`),
 };
 
+// ─── Banner ───
+export const bannerApi = {
+  getBanners: () => api.get('/banners/'),
+};
+
 // ─── Admin ───
 export const adminApi = {
   getUsers: (params?: { page?: number; search?: string }) =>
@@ -126,6 +131,15 @@ export const adminApi = {
   triggerCrawl: (boardType: 'health' | 'exercise') => api.post(`/admin/crawl/${boardType}`),
   getCrawlStatus: () => api.get('/admin/crawl/status'),
   stopCrawl: () => api.post('/admin/crawl/stop'),
+  // 배너
+  getAdminBanners: () => api.get('/admin/banners/'),
+  createBanner: (formData: FormData) =>
+    api.post('/admin/banners/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  toggleBanner: (id: number, is_active: boolean) =>
+    api.patch(`/admin/banners/${id}`, { is_active }),
+  deleteBanner: (id: number) => api.delete(`/admin/banners/${id}`),
 };
 
 export default api;

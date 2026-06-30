@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import BannerCarousel from '@/components/common/BannerCarousel';
 import { useQuery } from '@tanstack/react-query';
 import {
   Heart, Dumbbell, MessageSquare, CalendarDays,
@@ -47,6 +48,9 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
+
+      {/* ── 배너 캐러셀 (관리자 설정, 없으면 숨김) ── */}
+      <BannerCarousel />
 
       {/* ── Hero ── */}
       <section className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-500 p-10 text-white">
