@@ -4,6 +4,7 @@ from app.models.health import ExerciseLog, DietLog, WeightRecord
 from app.models.chat import ChatSession, ChatMessage, MedicalPaper
 from app.models.banner import Banner
 from app.models.recommendation import ExerciseRoutine, DietRecommendation
+from app.models.exercise_calorie import ExerciseCalorie
 
 __all__ = [
     "User", "UserProfile",
@@ -12,4 +13,5 @@ __all__ = [
     "ChatSession", "ChatMessage", "MedicalPaper",
     "Banner",
     "ExerciseRoutine", "DietRecommendation",
+    "ExerciseCalorie",
 ]

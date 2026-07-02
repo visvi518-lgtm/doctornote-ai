@@ -119,6 +119,8 @@ export const recommendationApi = {
     api.get('/recommendations/exercise', { params: purpose ? { purpose } : {} }),
   getDiet: (purpose?: string) =>
     api.get('/recommendations/diet', { params: purpose ? { purpose } : {} }),
+  getExerciseCalories: (category?: string) =>
+    api.get('/exercise-calories', { params: category ? { category } : {} }),
 };
 
 // ─── Admin ───
@@ -153,6 +155,14 @@ export const adminApi = {
     api.patch(`/admin/recommendations/diet/${id}`, { is_active }),
   deleteDiet: (id: number) => api.delete(`/admin/recommendations/diet/${id}`),
   seedRecommendations: () => api.post('/admin/recommendations/seed'),
+  // 칼로리 데이터
+  getAdminExerciseCalories: () => api.get('/admin/exercise-calories'),
+  createExerciseCalorie: (data: object) => api.post('/admin/exercise-calories', data),
+  updateExerciseCalorie: (id: number, data: object) => api.put(`/admin/exercise-calories/${id}`, data),
+  toggleExerciseCalorie: (id: number, is_active: boolean) =>
+    api.patch(`/admin/exercise-calories/${id}`, { is_active }),
+  deleteExerciseCalorie: (id: number) => api.delete(`/admin/exercise-calories/${id}`),
+  seedExerciseCalories: () => api.post('/admin/exercise-calories/seed'),
   // 배너
   getAdminBanners: () => api.get('/admin/banners/'),
   createBanner: (formData: FormData) =>

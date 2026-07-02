@@ -191,6 +191,15 @@ export interface DietRecommendation {
   is_active?: boolean;
 }
 
+export interface ExerciseCalorie {
+  id: number;
+  name: string;
+  category: string;
+  met: number;
+  description?: string;
+  is_active?: boolean;
+}
+
 // ────────────── Admin ──────────────
 export type BanDuration = '3d' | '3w' | '3m' | '3y' | 'permanent';
 

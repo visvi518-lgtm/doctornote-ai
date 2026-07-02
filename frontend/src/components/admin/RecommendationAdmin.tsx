@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dumbbell, Salad, Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronUp,
-  Pencil, X, Check, Database,
+  Pencil, X, Database, Flame,
 } from 'lucide-react';
 import { adminApi } from '@/services/api';
 import toast from 'react-hot-toast';
-import type { ExerciseRoutine, DietRecommendation, ExercisePurpose, DietPurpose, RoutineExercise, NutrientGoal } from '@/types';
+import type { ExerciseRoutine, DietRecommendation, ExercisePurpose, DietPurpose, RoutineExercise, NutrientGoal, ExerciseCalorie } from '@/types';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -417,7 +417,7 @@ function DietForm({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-type SubTab = 'exercise' | 'diet';
+type SubTab = 'exercise' | 'diet' | 'calorie';
 
 export default function RecommendationAdmin() {
   const qc = useQueryClient();
@@ -518,6 +518,69 @@ export default function RecommendationAdmin() {
     onError: (e: any) => toast.error(e.response?.data?.detail || '실패했습니다.'),
   });
 
+  // ─── Calorie tab state ───
+  const [calorieEditing, setCalorieEditing] = useState<number | null>(null);
+  const [calorieForm, setCalorieForm] = useState({ name: '', category: '유산소', met: 5.0, description: '' });
+  const [calorieCreating, setCalorieCreating] = useState(false);
+  const [calorieSearch, setCalorieSearch] = useState('');
+
+  const { data: calories = [] } = useQuery<ExerciseCalorie[]>({
+    queryKey: ['adminExerciseCalories'],
+    queryFn: () => adminApi.getAdminExerciseCalories().then((r) => r.data),
+    enabled: subTab === 'calorie',
+  });
+
+  const createCalorieMutation = useMutation({
+    mutationFn: (data: object) => adminApi.createExerciseCalorie(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adminExerciseCalories'] });
+      setCalorieCreating(false);
+      setCalorieForm({ name: '', category: '유산소', met: 5.0, description: '' });
+      toast.success('추가되었습니다.');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || '실패했습니다.'),
+  });
+
+  const updateCalorieMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: object }) => adminApi.updateExerciseCalorie(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adminExerciseCalories'] });
+      setCalorieEditing(null);
+      toast.success('수정되었습니다.');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || '실패했습니다.'),
+  });
+
+  const toggleCalorieMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+      adminApi.toggleExerciseCalorie(id, is_active),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['adminExerciseCalories'] }),
+  });
+
+  const deleteCalorieMutation = useMutation({
+    mutationFn: (id: number) => adminApi.deleteExerciseCalorie(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adminExerciseCalories'] });
+      toast.success('삭제되었습니다.');
+    },
+  });
+
+  const seedCalorieMutation = useMutation({
+    mutationFn: () => adminApi.seedExerciseCalories(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['adminExerciseCalories'] });
+      toast.success(res.data.message);
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || '실패했습니다.'),
+  });
+
+  const CALORIE_CATEGORIES = ['유산소', '근력', '스포츠', '기타'];
+
+  const filteredCalories = calories.filter((c) =>
+    c.name.toLowerCase().includes(calorieSearch.toLowerCase()) ||
+    c.category.includes(calorieSearch)
+  );
+
   const handleTabChange = (t: SubTab) => {
     setSubTab(t);
     setCreating(false);
@@ -544,24 +607,54 @@ export default function RecommendationAdmin() {
           >
             <Salad className="w-4 h-4" /> 식단 추천
           </button>
+          <button
+            onClick={() => handleTabChange('calorie')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+              ${subTab === 'calorie' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            <Flame className="w-4 h-4" /> 칼로리 데이터
+          </button>
         </div>
         <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => seedMutation.mutate()}
-            disabled={seedMutation.isPending}
-            className="btn-secondary text-sm flex items-center gap-1.5"
-          >
-            <Database className="w-4 h-4" />
-            {seedMutation.isPending ? '추가 중...' : '기본 데이터 추가'}
-          </button>
-          {!creating && (
-            <button
-              onClick={() => { setCreating(true); setEditingId(null); }}
-              className="btn-primary text-sm flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              {subTab === 'exercise' ? '운동 루틴 추가' : '식단 추천 추가'}
-            </button>
+          {subTab === 'calorie' ? (
+            <>
+              <button
+                onClick={() => seedCalorieMutation.mutate()}
+                disabled={seedCalorieMutation.isPending}
+                className="btn-secondary text-sm flex items-center gap-1.5"
+              >
+                <Database className="w-4 h-4" />
+                {seedCalorieMutation.isPending ? '추가 중...' : '기본 데이터 추가'}
+              </button>
+              {!calorieCreating && (
+                <button
+                  onClick={() => { setCalorieCreating(true); setCalorieEditing(null); }}
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> 운동 추가
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isPending}
+                className="btn-secondary text-sm flex items-center gap-1.5"
+              >
+                <Database className="w-4 h-4" />
+                {seedMutation.isPending ? '추가 중...' : '기본 데이터 추가'}
+              </button>
+              {!creating && (
+                <button
+                  onClick={() => { setCreating(true); setEditingId(null); }}
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  {subTab === 'exercise' ? '운동 루틴 추가' : '식단 추천 추가'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -692,6 +785,189 @@ export default function RecommendationAdmin() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ─── Calorie Tab ─── */}
+      {subTab === 'calorie' && (
+        <div className="space-y-3">
+          {/* 생성 폼 */}
+          {calorieCreating && (
+            <div className="card border border-primary-100 space-y-3">
+              <h3 className="font-semibold text-sm text-gray-900">새 운동 칼로리 데이터</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">운동 이름</label>
+                  <input
+                    type="text"
+                    value={calorieForm.name}
+                    onChange={(e) => setCalorieForm({ ...calorieForm, name: e.target.value })}
+                    placeholder="예) 조깅 (7km/h)"
+                    className="input-base text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">카테고리</label>
+                  <select
+                    value={calorieForm.category}
+                    onChange={(e) => setCalorieForm({ ...calorieForm, category: e.target.value })}
+                    className="input-base text-sm"
+                  >
+                    {CALORIE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    MET 값 <span className="text-gray-400 font-normal">(칼로리 = MET × 체중 × 시간)</span>
+                  </label>
+                  <input
+                    type="number" step="0.1" min="0.5" max="20"
+                    value={calorieForm.met}
+                    onChange={(e) => setCalorieForm({ ...calorieForm, met: Number(e.target.value) })}
+                    className="input-base text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">참고 (70kg 기준 시간당)</label>
+                  <div className="input-base text-sm bg-gray-50 text-gray-500 flex items-center">
+                    {Math.round(calorieForm.met * 70)} kcal/h
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">설명 (선택)</label>
+                <input
+                  type="text"
+                  value={calorieForm.description}
+                  onChange={(e) => setCalorieForm({ ...calorieForm, description: e.target.value })}
+                  placeholder="예) 일반적인 조깅 속도"
+                  className="input-base text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setCalorieCreating(false); setCalorieForm({ name: '', category: '유산소', met: 5.0, description: '' }); }}
+                  className="btn-secondary flex-1 text-sm"
+                >취소</button>
+                <button
+                  onClick={() => createCalorieMutation.mutate(calorieForm)}
+                  disabled={createCalorieMutation.isPending || !calorieForm.name.trim()}
+                  className="btn-primary flex-1 text-sm"
+                >
+                  {createCalorieMutation.isPending ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 검색 */}
+          <input
+            type="text"
+            value={calorieSearch}
+            onChange={(e) => setCalorieSearch(e.target.value)}
+            placeholder="운동명 또는 카테고리로 검색..."
+            className="input-base text-sm"
+          />
+
+          {/* 목록 */}
+          {filteredCalories.length === 0 ? (
+            <div className="card text-center py-10 text-gray-400">
+              <Flame className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">등록된 운동 칼로리 데이터가 없습니다.</p>
+              <p className="text-xs mt-1 text-gray-300">"기본 데이터 추가"로 55개 운동 데이터를 불러오세요.</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {filteredCalories.map((c) => (
+                <div key={c.id} className="card border border-gray-100 py-2.5 px-3">
+                  {calorieEditing === c.id ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          defaultValue={c.name}
+                          id={`cal-name-${c.id}`}
+                          placeholder="운동 이름"
+                          className="input-base text-sm"
+                        />
+                        <select
+                          id={`cal-cat-${c.id}`}
+                          defaultValue={c.category}
+                          className="input-base text-sm"
+                        >
+                          {CALORIE_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number" step="0.1"
+                          defaultValue={c.met}
+                          id={`cal-met-${c.id}`}
+                          placeholder="MET"
+                          className="input-base text-sm"
+                        />
+                        <input
+                          type="text"
+                          defaultValue={c.description ?? ''}
+                          id={`cal-desc-${c.id}`}
+                          placeholder="설명 (선택)"
+                          className="input-base text-sm"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setCalorieEditing(null)} className="btn-secondary flex-1 text-xs">취소</button>
+                        <button
+                          onClick={() => {
+                            const name = (document.getElementById(`cal-name-${c.id}`) as HTMLInputElement).value;
+                            const category = (document.getElementById(`cal-cat-${c.id}`) as HTMLSelectElement).value;
+                            const met = Number((document.getElementById(`cal-met-${c.id}`) as HTMLInputElement).value);
+                            const description = (document.getElementById(`cal-desc-${c.id}`) as HTMLInputElement).value;
+                            updateCalorieMutation.mutate({ id: c.id, data: { name, category, met, description } });
+                          }}
+                          disabled={updateCalorieMutation.isPending}
+                          className="btn-primary flex-1 text-xs"
+                        >저장</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">{c.category}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.is_active ? 'text-green-600' : 'text-gray-400'}`}>
+                            {c.is_active ? '활성' : '비활성'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-gray-800 mt-0.5">{c.name}</p>
+                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
+                          <span>MET {c.met}</span>
+                          <span className="text-orange-500 font-medium">{Math.round(c.met * 70)} kcal/h <span className="text-gray-400 font-normal">(70kg 기준)</span></span>
+                          {c.description && <span className="hidden sm:inline">{c.description}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => setCalorieEditing(c.id)}
+                          className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                        ><Pencil className="w-3.5 h-3.5" /></button>
+                        <button
+                          onClick={() => toggleCalorieMutation.mutate({ id: c.id, is_active: !c.is_active })}
+                          className={`p-1.5 rounded-lg ${c.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                        >{c.is_active ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}</button>
+                        <button
+                          onClick={() => deleteCalorieMutation.mutate(c.id)}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        ><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-gray-400 text-right">{filteredCalories.length}개 표시</p>
+            </div>
+          )}
         </div>
       )}
 

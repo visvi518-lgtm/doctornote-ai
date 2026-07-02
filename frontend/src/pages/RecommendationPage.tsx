@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, Dumbbell, Salad, Clock, BarChart2, Flame } from 'lucide-react';
+import { ChevronDown, ChevronUp, Dumbbell, Salad, Clock, Flame, Search } from 'lucide-react';
 import { recommendationApi } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
-import type { ExerciseRoutine, DietRecommendation, ExercisePurpose, DietPurpose, RoutineExercise } from '@/types';
+import type { ExerciseRoutine, DietRecommendation, ExercisePurpose, DietPurpose, ExerciseCalorie } from '@/types';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -184,7 +184,9 @@ function DietCard({ rec }: { rec: DietRecommendation }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type MainTab = 'exercise' | 'diet';
+type MainTab = 'exercise' | 'diet' | 'calorie';
+
+const CALORIE_CATEGORIES = ['전체', '유산소', '근력', '스포츠', '기타'];
 
 export default function RecommendationPage() {
   const user = useAuthStore((s) => s.user);
@@ -192,6 +194,7 @@ export default function RecommendationPage() {
 
   const userExercisePurpose = (user?.profile?.exercise_purpose as ExercisePurpose | undefined);
   const userDietPurpose = (user?.profile?.diet_purpose as DietPurpose | undefined);
+  const profileWeight = user?.profile?.weight;
 
   const [exercisePurpose, setExercisePurpose] = useState<ExercisePurpose | ''>(
     userExercisePurpose ?? ''
@@ -199,6 +202,13 @@ export default function RecommendationPage() {
   const [dietPurpose, setDietPurpose] = useState<DietPurpose | ''>(
     userDietPurpose ?? ''
   );
+
+  // Calorie calculator state
+  const [calCategory, setCalCategory] = useState('전체');
+  const [calSearch, setCalSearch] = useState('');
+  const [selectedExercise, setSelectedExercise] = useState<ExerciseCalorie | null>(null);
+  const [duration, setDuration] = useState(30);
+  const [weight, setWeight] = useState(profileWeight ?? 70);
 
   const { data: exerciseData = [], isLoading: exLoading } = useQuery<ExerciseRoutine[]>({
     queryKey: ['recommendations', 'exercise', exercisePurpose],
@@ -211,6 +221,26 @@ export default function RecommendationPage() {
     queryFn: () =>
       recommendationApi.getDiet(dietPurpose || undefined).then((r) => r.data),
   });
+
+  const { data: calorieData = [], isLoading: calLoading } = useQuery<ExerciseCalorie[]>({
+    queryKey: ['exercise-calories'],
+    queryFn: () => recommendationApi.getExerciseCalories().then((r) => r.data),
+    enabled: tab === 'calorie',
+  });
+
+  const filteredCalories = useMemo(() => {
+    let list = calorieData;
+    if (calCategory !== '전체') list = list.filter((c) => c.category === calCategory);
+    if (calSearch.trim()) {
+      const q = calSearch.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q));
+    }
+    return list;
+  }, [calorieData, calCategory, calSearch]);
+
+  const calculatedCalories = selectedExercise
+    ? Math.round(selectedExercise.met * weight * (duration / 60))
+    : null;
 
   return (
     <div className="space-y-6">
@@ -234,6 +264,13 @@ export default function RecommendationPage() {
             ${tab === 'diet' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
         >
           <Salad className="w-4 h-4" /> 식단 추천
+        </button>
+        <button
+          onClick={() => setTab('calorie')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors
+            ${tab === 'calorie' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+        >
+          <Flame className="w-4 h-4" /> 칼로리 계산
         </button>
       </div>
 
@@ -314,6 +351,135 @@ export default function RecommendationPage() {
               {dietData.map((r) => <DietCard key={r.id} rec={r} />)}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── Calorie Calculator Tab ─── */}
+      {tab === 'calorie' && (
+        <div className="space-y-4">
+          {/* Calculator card */}
+          <div className="card border border-orange-100 space-y-4">
+            <div className="flex items-center gap-2">
+              <Flame className="w-5 h-5 text-orange-500" />
+              <h2 className="font-semibold text-gray-900">운동 칼로리 계산기</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">체중 (kg)</label>
+                <input
+                  type="number" min="30" max="200" step="0.5"
+                  value={weight}
+                  onChange={(e) => setWeight(Number(e.target.value))}
+                  className="input-base text-sm"
+                />
+                {profileWeight && weight !== profileWeight && (
+                  <button
+                    onClick={() => setWeight(profileWeight)}
+                    className="text-xs text-primary-600 mt-1 hover:underline"
+                  >
+                    프로필 체중으로 ({profileWeight}kg)
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">운동 시간 (분)</label>
+                <input
+                  type="number" min="1" max="300" step="5"
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="input-base text-sm"
+                />
+              </div>
+            </div>
+
+            {selectedExercise ? (
+              <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-xs text-orange-600 font-medium">{selectedExercise.category}</p>
+                  <p className="font-semibold text-gray-900">{selectedExercise.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">MET {selectedExercise.met} · {duration}분 · {weight}kg</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-orange-500">{calculatedCalories}</p>
+                  <p className="text-xs text-gray-500">kcal 소모</p>
+                </div>
+                <button
+                  onClick={() => setSelectedExercise(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 self-start"
+                >✕</button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-2">
+                아래 목록에서 운동을 선택하면 칼로리가 계산됩니다.
+              </p>
+            )}
+          </div>
+
+          {/* Exercise list */}
+          <div className="space-y-3">
+            {/* Category filter */}
+            <div className="flex flex-wrap gap-2">
+              {CALORIE_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCalCategory(cat)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border
+                    ${calCategory === cat ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <input
+                type="text"
+                value={calSearch}
+                onChange={(e) => setCalSearch(e.target.value)}
+                placeholder="운동명으로 검색..."
+                className="input-base text-sm pl-9"
+              />
+            </div>
+
+            {calLoading ? (
+              <div className="text-center py-12 text-gray-400 text-sm">불러오는 중...</div>
+            ) : filteredCalories.length === 0 ? (
+              <div className="card text-center py-12 text-gray-400">
+                <Flame className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">검색 결과가 없습니다.</p>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {filteredCalories.map((c) => {
+                  const isSelected = selectedExercise?.id === c.id;
+                  const kcal = Math.round(c.met * weight * (duration / 60));
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedExercise(isSelected ? null : c)}
+                      className={`text-left rounded-xl border p-3 transition-all hover:border-orange-300 ${
+                        isSelected ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-white hover:bg-orange-50/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">{c.category}</span>
+                          <p className="text-sm font-medium text-gray-800 mt-1 leading-tight">{c.name}</p>
+                          {c.description && <p className="text-xs text-gray-400 mt-0.5 truncate">{c.description}</p>}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-base font-bold text-orange-500">{kcal}</p>
+                          <p className="text-xs text-gray-400">kcal/{duration}분</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
